@@ -1,0 +1,4 @@
+name = "CircStat"
+uuid = "2f6764a1-d620-4564-9394-76eb7c776766"
+authors = ["Li Alex Zhang <fff008@gmail.com>"]
+version = "0.1.0"
