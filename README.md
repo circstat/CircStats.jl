@@ -1,1 +1,1 @@
-# circstat_julia
+# CircStat
