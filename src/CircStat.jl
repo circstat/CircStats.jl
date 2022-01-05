@@ -1,9 +1,8 @@
 module CircStat
 
-using Statistics,LinearAlgebra
+using Statistics,LinearAlgebra,Distributions,SpecialFunctions
 
-include("descriptive.jl")
-include("test.jl")
+include("src.jl")
 
 # export all symbols
 for n in names(@__MODULE__, all=true)
