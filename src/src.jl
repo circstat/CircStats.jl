@@ -315,17 +315,7 @@ function circ_stats(α::AbstractVector; w = ones(size(α)), d = 0)
   # kurtosis
   kurtosis, kurtosis0 = circ_kurtosis(α; w)
 
-  return (;
-    mean,
-    median,
-    var,
-    std,
-    std0,
-    skewness,
-    skewness0,
-    kurtosis,
-    kurtosis0,
-  )
+  return (; mean, median, var,std,std0, skewness,skewness0,kurtosis,kurtosis0)
 end
 
 
@@ -406,11 +396,209 @@ function circ_otest(α; sz = deg2rad(1), w = ones(size(α)))
   return (; p, m)
 end
 
+"""
+Calculates Rao's spacing test by comparing distances between points on a circle to those expected from a uniform distribution.
+  H0: Data is distributed uniformly around the circle.
+  H1: Data is not uniformly distributed around the circle.
 
-# circ_raotest Rao""s spacing test for nonuniformity
-# circ_vtest V-Test for nonuniformity with known mean direction
-# circ_medtest Test for median angle
-# circ_mtest One-sample test for specified mean direction
+  Alternative to the Rayleigh test and the Omnibus test. Less powerful
+  than the Rayleigh test when the distribution is unimodal on a global scale but uniform locally.
+
+  Due to the complexity of the distributioin of the test statistic, we resort to the tables published by
+  Russell, Gerald S. and Levitin, Daniel J.(1995) An expanded table of probability values for rao's spacing test, Communications in Statistics - Simulation and Computation
+  Therefore the reported p-value is the smallest α level at which the test would still be significant.
+  If the test is not significant at the α=0.1 level, we return the critical value for α = 0.05 and p = 0.5.
+
+  1. α: sample of angles in radians
+
+  return:
+  - p: smallest p-value at which test would be significant
+  - u: computed value of the test-statistic u
+  - UC: critical value of the test statistic at sig-level
+"""
+function circ_raotest(α)
+  # for the purpose of the test, convert to angles
+  α = sort(rad2deg.(α))
+  n = length(α)
+
+  # compute test statistic
+  u = 0
+  λ = 360 / n
+  for j = 1:n-1
+    ti = α[j+1] - α[j]
+    u += abs(ti - λ)
+  end
+
+  tn = 360 - α[n] + α[1]
+  u = 0.5(u + abs(tn - λ))
+
+  getVal = (N, u) -> begin
+      # Table II from Russel and Levitin, 1995
+      α = [0.001, 0.01, 0.05, 0.10]
+      table = [
+        4 247.32 221.14 186.45 168.02
+        5 245.19 211.93 183.44 168.66
+        6 236.81 206.79 180.65 166.30
+        7 229.46 202.55 177.83 165.05
+        8 224.41 198.46 175.68 163.56
+        9 219.52 195.27 173.68 162.36
+        10 215.44 192.37 171.98 161.23
+        11 211.87 189.88 170.45 160.24
+        12 208.69 187.66 169.09 159.33
+        13 205.87 185.68 167.87 158.50
+        14 203.33 183.90 166.76 157.75
+        15 201.04 182.28 165.75 157.06
+        16 198.96 180.81 164.83 156.43
+        17 197.05 179.46 163.98 155.84
+        18 195.29 178.22 163.20 155.29
+        19 193.67 177.08 162.47 154.78
+        20 192.17 176.01 161.79 154.31
+        21 190.78 175.02 161.16 153.86
+        22 189.47 174.10 160.56 153.44
+        23 188.25 173.23 160.01 153.05
+        24 187.11 172.41 159.48 152.68
+        25 186.03 171.64 158.99 152.32
+        26 185.01 170.92 158.52 151.99
+        27 184.05 170.23 158.07 151.67
+        28 183.14 169.58 157.65 151.37
+        29 182.28 168.96 157.25 151.08
+        30 181.45 168.38 156.87 150.80
+        35 177.88 165.81 155.19 149.59
+        40 174.99 163.73 153.82 148.60
+        45 172.58 162.00 152.68 147.76
+        50 170.54 160.53 151.70 147.05
+        75 163.60 155.49 148.34 144.56
+        100 159.45 152.46 146.29 143.03
+        150 154.51 148.84 143.83 141.18
+        200 151.56 146.67 142.35 140.06
+        300 148.06 144.09 140.57 138.71
+        400 145.96 142.54 139.50 137.89
+        500 144.54 141.48 138.77 137.33
+        600 143.48 140.70 138.23 136.91
+        700 142.66 140.09 137.80 136.59
+        800 142.00 139.60 137.46 136.33
+        900 141.45 139.19 137.18 136.11
+        1000 140.99 138.84 136.94 135.92]
+
+      ridx = findfirst(table[:, 1] .>= N)
+      cidx = findfirst(table[ridx, 2:end] .< u)
+
+      if isnothing(cidx)
+        UC = table[ridx, end-1]
+        p = 0.5
+      else
+        UC = table[ridx, cidx+1]
+        p = α[cidx]
+      end
+      return p, UC
+    end
+
+  # get critical value from table
+  p, UC = getVal(n, u)
+
+  return (; p, u, UC)
+end
+
+"""
+Computes V test for non-uniformity of circular data with a specified mean direction.
+
+  H0: the population is uniformly distributed around the circle
+  HA: the population is not distributed uniformly around the circle but has a mean of `m`.
+
+  !!!note
+    Not rejecting H0 may mean that the population is uniformly distributed around the circle OR
+    that it has a mode but that this mode is not centered at `m`.
+
+  The V test has more power than the Rayleigh test and is preferred if there is reason to believe in a specific mean direction.
+
+  1. α: sample of angles in radians
+  - m: suspected mean direction, default=0
+  - w: number of incidences in case of binned angle data
+  - d: spacing of bin centers for binned data, used to correct for bias in estimation of r, in radians
+
+  return:
+  - p: p-value of V test
+  - v: value of the V statistic
+"""
+function circ_vtest(α; m = 0, w = ones(size(α)), d = 0)
+  # compute some ingredients
+  r = circ_r(α; w, d)
+  μ, = circ_mean(α; w)
+  n = sum(w)
+
+  # compute Rayleigh's R (equ. 27.1)
+  R = n * r
+
+  # compute the V statistic (equ. 27.5)
+  v = R * cos(μ - m)
+
+  # compute u (equ. 27.6)
+  u = v * sqrt(2 / n)
+
+  # compute p-value from one tailed normal approximation
+  p = 1 - cdf(Normal(), u)
+
+  return (; p, v)
+end
+
+
+"""
+Tests for significance of the median.
+
+  H0: the population has median angle `md`
+  HA: the population has not median angle `md`
+
+  1. α: sample of angles in radians
+  - md: median to test, default=0
+
+  return: p-value
+"""
+function circ_medtest(α; md = 0)
+  n = length(α)
+
+  # compute deviations from median
+  d = circ_dist(α, md)
+
+  n1 = sum(d .< 0)
+  n2 = sum(d .> 0)
+
+  # compute p-value with binomial test
+  sum(pdf.(Binomial(n, 0.5), [0:min(n1, n2); max(n1, n2):n]))
+end
+
+
+"""
+One-Sample test for the mean angle.
+  H0: the population has mean `m`.
+  HA: the population has not mean `m`.
+
+  !!!note: This is the equvivalent to a one-sample t-test with specified mean direction.
+
+  1. α: sample of angles in radians
+  - m: assumed mean direction, default=0
+  - w: number of incidences in case of binned angle data
+  - d: spacing of bin centers for binned data, used to correct for bias in estimation of r, in radians
+  - xi: alpha level of the test
+
+  return:
+  - h: false if H0 can not be rejected, true otherwise
+  - μ: mean
+  - ul: upper (1-xi) confidence level
+  - ll: lower (1-xi) confidence level
+"""
+function circ_mtest(α; xi = 0.05, m = 0, w = ones(size(α)), d = 0)
+  # compute ingredients
+  μ, = circ_mean(α; w)
+  t = circ_confmean(α; xi, w, d)
+  ul = μ + t
+  ll = μ - t
+
+  # compute test via confidence limits (example 27.3)
+  h = abs(circ_dist2(m, μ)) > t
+
+  return (; h, μ, ul, ll)
+end
+
 
 
 """
@@ -684,10 +872,168 @@ function circ_hktest(α, idp, idq; inter = true, fn = ['A', 'B'])
 end
 
 
+"""
+A parametric two-sample test to determine whether two concentration parameters are different.
 
-# circ_ktest Test for equal concentration parameter
-# circ_symtest Test for symmetry around median angle
-# circ_kuipertest Test whether two distributions are identical (like KS test)
+  H0: The two concentration parameters are equal.
+  HA: The two concentration parameters are different.
+
+  Assumptions: both samples are drawn from von Mises type distributions and their joint resultant vector length should be > .7
+
+  1. α₁: sample of angles in radians
+  2. α₂: sample of angles in radians
+
+  return:
+  - p: p-value that samples have different concentrations
+  - f: f-statistic calculated
+"""
+function circ_ktest(α₁, α₂)
+  n1 = length(α₁)
+  n2 = length(α₂)
+
+  R1 = n1 * circ_r(α₁)
+  R2 = n2 * circ_r(α₂)
+
+  # make sure that r̄ > .7
+  r̄ = (R1 + R2) / (n1 + n2)
+
+  if r̄ < 0.7
+    @warn "Resultant vector length should be > 0.7"
+  end
+
+  # calculate test statistic
+  f = ((n2 - 1) * (n1 - R1)) / ((n1 - 1) * (n2 - R2))
+  if f > 1
+    p = 2 * (1 - cdf(FDist(n1, n2), f))
+  else
+    f = 1 / f
+    p = 2 * (1 - cdf(FDist(n2, n1), f))
+  end
+  return (; p, f)
+end
+
+
+"""
+Tests for symmetry about the median.
+  H0: the population is symmetrical around the median
+  HA: the population is not symmetrical around the median
+
+  1. α: sample of angles in radians
+
+  return: p-value
+"""
+function circ_symtest(α)
+  # compute median
+  md = circ_median(α)
+
+  # compute deviations from median
+  d = circ_dist(α, md)
+
+  # compute wilcoxon sign rank test
+  pvalue(SignedRankTest(d))
+end
+
+const kuipertable= [5	1.45800000000000	1.56500000000000	1.68200000000000	1.76300000000000	1.83800000000000	1.92000000000000	1.97000000000000;
+                    6	1.47100000000000	1.58200000000000	1.71100000000000	1.79300000000000	1.86700000000000	1.95700000000000	2.02000000000000;
+                    7	1.48300000000000	1.59800000000000	1.72700000000000	1.81400000000000	1.89400000000000	1.98700000000000	2.05100000000000;
+                    8	1.49300000000000	1.60800000000000	1.74100000000000	1.83000000000000	1.91100000000000	2.00900000000000	2.07700000000000;
+                    9	1.50000000000000	1.61800000000000	1.75200000000000	1.84300000000000	1.92600000000000	2.02700000000000	2.09700000000000;
+                    10	1.50700000000000	1.62500000000000	1.76100000000000	1.85400000000000	1.93800000000000	2.04100000000000	2.11300000000000;
+                    11	1.51300000000000	1.63100000000000	1.76900000000000	1.86200000000000	1.94800000000000	2.05300000000000	2.12600000000000;
+                    12	1.51700000000000	1.63700000000000	1.77600000000000	1.87000000000000	1.95700000000000	2.06200000000000	2.13700000000000;
+                    13	1.52200000000000	1.64200000000000	1.78200000000000	1.87600000000000	1.96400000000000	2.07100000000000	2.15400000000000;
+                    14	1.52500000000000	1.64600000000000	1.78700000000000	1.88200000000000	1.97000000000000	2.07800000000000	2.15400000000000;
+                    15	1.52900000000000	1.65000000000000	1.79100000000000	1.88700000000000	1.97600000000000	2.08500000000000	2.16100000000000;
+                    16	1.53200000000000	1.65300000000000	1.79500000000000	1.89200000000000	1.98100000000000	2.09000000000000	2.16800000000000;
+                    17	1.53400000000000	1.65700000000000	1.79900000000000	1.89600000000000	1.98600000000000	2.09600000000000	2.17300000000000;
+                    18	1.53700000000000	1.65900000000000	1.80200000000000	1.89900000000000	1.99000000000000	2.10000000000000	2.17800000000000;
+                    19	1.53900000000000	1.66200000000000	1.80500000000000	1.90300000000000	1.99300000000000	2.10400000000000	2.18300000000000;
+                    20	1.54100000000000	1.66400000000000	1.80800000000000	1.90600000000000	1.99700000000000	2.10800000000000	2.18700000000000;
+                    21	1.54300000000000	1.66700000000000	1.81000000000000	1.90800000000000	2	                2.11200000000000	2.19100000000000;
+                    22	1.54500000000000	1.66900000000000	1.81300000000000	1.91100000000000	2.00300000000000	2.11500000000000	2.19400000000000;
+                    23	1.54700000000000	1.67000000000000	1.81500000000000	1.91300000000000	2.00500000000000	2.11800000000000	2.19800000000000;
+                    24	1.54900000000000	1.67200000000000	1.81700000000000	1.91600000000000	2.00800000000000	2.12100000000000	2.20100000000000;
+                    25	1.55000000000000	1.67400000000000	1.81900000000000	1.91800000000000	2.01000000000000	2.12300000000000	2.20300000000000;
+                    30	1.55600000000000	1.68100000000000	1.82600000000000	1.92600000000000	2.01900000000000	2.13400000000000	2.21500000000000;
+                    35	1.56100000000000	1.68600000000000	1.83200000000000	1.93300000000000	2.02600000000000	2.14100000000000	2.22300000000000;
+                    40	1.56500000000000	1.69000000000000	1.83700000000000	1.93800000000000	2.03200000000000	2.14800000000000	2.23000000000000;
+                    45	1.56800000000000	1.69400000000000	1.84100000000000	1.94200000000000	2.03600000000000	2.15200000000000	2.23500000000000;
+                    50	1.57100000000000	1.69700000000000	1.84400000000000	1.94600000000000	2.04000000000000	2.15700000000000	2.23900000000000;
+                    100	1.58800000000000	1.71400000000000	1.86200000000000	1.96500000000000	2.06000000000000	2.17800000000000	2.26200000000000;
+                    200	1.60000000000000	1.72600000000000	1.87600000000000	1.97900000000000	2.07500000000000	2.19400000000000	2.27900000000000;
+                    500	1.61000000000000	1.73700000000000	1.88700000000000	1.99000000000000	2.08700000000000	2.20700000000000	2.29200000000000;
+                    501	1.62000000000000	1.74700000000000	1.89800000000000	2.00100000000000	2.09800000000000	2.21800000000000	2.30300000000000]
+
+
+"""
+The Kuiper two-sample test tests whether the two samples differ significantly.
+The difference can be in any property, such as mean location and dispersion.
+It is a circular analogue of the Kolmogorov-Smirnov test.
+
+  H0: The two distributions are identical.
+  HA: The two distributions are different.
+
+  1. α₁: sample of angles in radians
+  2. α₂: sample of angles in radians
+    - n: resolution at which the cdf are evaluated
+
+  return:
+  - p: p-value; the smallest of .10, .05, .02, .01, .005, .002, .001,
+        for which the test statistic is still higher than the respective critical value.
+        this is due to the use of tabulated values. if p>.1, pval is set to 1.
+  - k: test statistic
+  - K: critical value
+"""
+function circ_kuipertest(α₁, α₂; n = 100)
+  n = length(α₁)
+  m = length(α₂)
+
+  # create cdfs of both samples
+  ϕ₁, cdf1 = circ_samplecdf(α₁; n)
+  _, cdf2 = circ_samplecdf(α₂; n)
+
+  # maximal difference between sample cdfs
+  dplus, gdpi = findmax([0; cdf1 .- cdf2])
+  dminus, gdmi = findmax([0; cdf2 .- cdf1])
+
+  # calculate k-statistic
+  k = n * m * (dplus + dminus)
+
+  # find p-value
+  p, K = kuiperlookup(min(n, m), k / sqrt(n * m * (n + m)))
+  K *= sqrt(n * m * (n + m))
+
+  return (; p, k, K)
+end
+
+function kuiperlookup(n, k)
+  α = [0.10, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
+  nn = kuipertable[:, 1]
+
+  # find correct row of the table
+  row = findfirst(n.==nn)
+  if isnothing(row)
+    # find closest value if no entry is present
+    row = length(nn) - sum(n .< nn)
+    if row == 0
+      error("n too small.")
+    else
+      @warn "n=$n not found in table, using closest n=$(nn[row]) present."
+    end
+  end
+
+  # find minimal p-value and test-statistic
+  idx = findlast(kuipertable[row, 2:end] .< k)
+  if isnothing(idx)
+    p = 1
+    K = NaN
+  else
+    p = α[idx]
+    K = kuipertable[row, idx+1]
+  end
+
+  return (; p, K)
+end
 
 
 """
@@ -784,9 +1130,92 @@ function circ_kappa(α; w = ones(size(α)))
   κ
 end
 
+"""
+Performs a simple agglomerative clustering of angular data.
 
+1. α: sample of angles in radians
+  - k: number of clusters desired, default=2
 
+return:
+- cid: cluster id for each entry of α
+- α: sorted angles, matched with cid
+- μ: mean direction of angles in each cluster
+"""
+function circ_clust(α; k = 2)
 
-# circ_plot Visualization for circular data
-# circ_clust Simple clustering for circular data
-# circ_samplecdf Evaluate CDF of a sample of angles
+  n = length(α)
+  n < k && error("Not enough data for clusters.")
+
+  # prepare data
+  cid = 1:n
+
+  # main clustering loop
+  num_unique = length(unique(cid))
+
+  while (num_unique > k)
+
+    # find centroid means...
+
+    # calculate the means for each putative cluster
+    μ = fill(NaN, n)
+    for j = 1:n
+      if sum(cid .== j) > 0
+        μ[j], = circ_mean(α(cid .== j))
+      end
+    end
+
+    # find distance between centroids...
+    μdist = abs.(circ_dist2(μ))
+
+    # find closest pair of clusters/datapoints
+    mindist = minimum(μdist[tril(ones(size(μdist), size(μdist)), -1)==1])
+    row, col = findall(μdist .== mindist)
+
+    # update cluster id's
+    cid[cid.==maximum(row)] = minimum(col)
+
+    # update stop criteria
+    num_unique = length(unique(cid))
+
+  end
+
+  # renumber cluster ids (so cids [1 3 7 10] => [1 2 3 4])
+  cid2 = deepcopy(cid)
+  uniquecids = unique(cid)
+  for j = 1:length(uniquecids)
+    cid[cid2.==uniquecids[j]] = j
+  end
+
+  # compute final cluster means
+  μ = fill(NaN, num_unique)
+  for j = 1:num_unique
+    if sum(cid .== j) > 0
+      μ[j], = circ_mean(α[cid.==j]')
+    end
+  end
+
+  return (; cid, α, μ)
+end
+
+"""
+Helper function for circ_kuipertest. Evaluates CDF of sample.
+
+  1. α: sample of angles in radians
+    - n: resolution at which the cdf are evaluated
+
+  return:
+  - ϕ: angles at which CDF are evaluated
+  - c: CDF values at ϕ
+"""
+function circ_samplecdf(α; n = 100)
+  ϕ = range(0, 2π, length = n + 1)
+
+  # ensure all points in α are on interval [0, 2pi)
+  α = sort(mod.(α,2π))
+
+  dp = 1 / length(α) # incremental change in probability
+  c = cumsum(map((l, r) -> dp * sum(l .<= α .< r), ϕ[1:end-1], ϕ[2:end]))
+  ϕ = ϕ[1:end-1]
+
+  return (; ϕ, c)
+end
