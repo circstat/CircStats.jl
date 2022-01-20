@@ -89,7 +89,6 @@ using Test, CircStats
 
     circ_stats(av)
 
-
     p,z = circ_rtest(av)
     @test p ≈ 1.247327496731614e-04
     @test z ≈ 8.564813412808679
@@ -155,6 +154,5 @@ using Test, CircStats
     ϕ,c = circ_samplecdf(av,n=8)
     @test ϕ[4] ≈ 2.356194490192345
     @test c[4] ≈ 0.783783783783784
-
 
 end
