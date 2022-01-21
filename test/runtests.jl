@@ -1,6 +1,6 @@
-using Test, CircStat
+using Test, CircStats
 
-@testset "CircStat" begin
+@testset "CircStats" begin
     av = [0:0.2:π;0.4π:0.05:0.6π;π:0.4:2π]
     am = [av av]
     aa = [am;;;am]
@@ -40,9 +40,6 @@ using Test, CircStat
 
     @test circ_median(av) ≈ 1.556637061435917
 
-
-
-
     s, s0 = circ_std(av)
     @test s ≈ 1.018699970603607
     @test s0 ≈ 1.209651009981690
@@ -68,7 +65,6 @@ using Test, CircStat
     circ_dist2(α)
     circ_dist2(α,β)
 
-
     mp, ρp, μp = circ_moment(av)
     @test mp ≈ 0.000917488892268 + 0.481124310135703im
     @test ρp ≈ 0.481125184946105
@@ -93,9 +89,6 @@ using Test, CircStat
 
     circ_stats(av)
 
-
-
-
     p,z = circ_rtest(av)
     @test p ≈ 1.247327496731614e-04
     @test z ≈ 8.564813412808679
@@ -119,8 +112,34 @@ using Test, CircStat
     @test s[2] ≈ 0.289841683535636
     @test isnan(s[3])
 
+    p,f = circ_ktest(av,reverse(av))
+    @test p ≈ 0.999999999999993
+    @test f ≈ 1
 
+    p = circ_symtest(av)
+    # @test p ≈ 0.850454511827570 # diff in signrank in matlab?
 
+    p,k,K=circ_kuipertest(av,reverse(av))
+    @test p ≈ 1
+    @test k ≈ 0
+
+    p, u, UC = circ_raotest(av)
+    @test p ≈ 0.5
+    @test u ≈ 121.1858500639162
+    @test UC ≈ 153.82
+
+    p, v = circ_vtest(av)
+    @test p ≈ 0.496851365629160
+    @test v ≈ 0.033947089013911
+
+    p = circ_medtest(av)
+    @test p ≈ .0004719867429230360
+
+    h, μ, ul, ll = circ_mtest(av)
+    @test h
+    @test μ ≈ 1.568889360630885
+    @test ul ≈ 2.037005335388447
+    @test ll ≈ 1.100773385873324
 
     ρ,p = circ_corrcc(av,reverse(av))
     @test ρ ≈ 0.204639214081096
@@ -132,5 +151,8 @@ using Test, CircStat
 
     @test circ_kappa(av) ≈ 1.095105628679724
 
+    ϕ,c = circ_samplecdf(av,n=8)
+    @test ϕ[4] ≈ 2.356194490192345
+    @test c[4] ≈ 0.783783783783784
 
 end

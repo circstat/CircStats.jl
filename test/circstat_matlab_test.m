@@ -50,11 +50,20 @@ idx = [ones(18,1);2*ones(19,1)]
 idp = [repmat([1;2;3;4],9,1);1]
 idq = [repmat([1;2],18,1);1]
 [p,s] = circ_hktest(av,idp,idq)
+[p,f] = circ_ktest(av,flipud(av))
+p = circ_symtest(av)
+[p,k,K]=circ_kuipertest(av,flipud(av))
+[p, u, UC] = circ_raotest(av)
+[p, v] = circ_vtest(av,0)
+p = circ_medtest(av,0)
+[h, mu, ul, ll] = circ_mtest(av,0)
 
 
 [r,p] = circ_corrcc(av,flipud(av))
 [r,p] = circ_corrcl(av,flipud(av))
 
 circ_kappa(av)
+
+[phi,c] = circ_samplecdf(av,8)
 
 

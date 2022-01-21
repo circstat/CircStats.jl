@@ -1,6 +1,6 @@
-module CircStat
+module CircStats
 
-using Statistics,LinearAlgebra,Distributions,SpecialFunctions
+using Statistics,LinearAlgebra,Distributions,SpecialFunctions,HypothesisTests
 
 include("src.jl")
 
