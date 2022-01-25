@@ -10,7 +10,7 @@ Computes mean resultant vector length for circular data.
 """
 function circ_r(α; w = ones(size(α)), d = 0, dims = 1)
   # compute weighted sum of cos and sin of angles
-  r = sum(w .* exp.(im * α); dims)
+  r = sum(w .* cis.(α); dims)
 
   # obtain length
   r = abs.(r) ./ sum(w; dims)
@@ -37,7 +37,7 @@ Computes the mean direction for circular data.
 """
 function circ_mean(α; w = ones(size(α)), dims = 1)
   # compute weighted sum of cos and sin of angles
-  r = sum(w .* exp.(im * α); dims)
+  r = sum(w .* cis.(α); dims)
 
   # obtain mean by
   μ = angle.(r)
@@ -59,7 +59,7 @@ Transforms p-axial data to a common scale.
 
   return: transformed data
 """
-circ_axial(α, p = 1) = mod.(α * p, 2π)
+circ_axial(α, p = 1) = mod2pi.(α * p)
 
 """
 Computes the median direction for circular data.
@@ -69,7 +69,7 @@ Computes the median direction for circular data.
   return: median direction
 """
 function circ_median(α::AbstractVector)
-  α = mod.(α, 2π)
+  α = mod2pi.(α)
   n = length(α)
 
   dd = circ_dist2(α)
@@ -81,7 +81,7 @@ function circ_median(α::AbstractVector)
   md = circ_mean(α[dm.==m]).μ
   αμ = circ_mean(α).μ
   if abs(circ_dist(αμ, md)) > abs(circ_dist(αμ, md + π))
-    md = mod(md + π, 2π)
+    md = mod2pi(md + π)
   end
   return md
 end
@@ -277,7 +277,7 @@ Pairwise difference α-β around the circle computed efficiently.
 
   return: matrix with differences
 """
-circ_dist(α, β) = angle.(exp.(im * α) ./ exp.(im * β))
+circ_dist(α, β) = angle.(cis.(α) ./ cis.(β))
 
 
 """
@@ -289,7 +289,7 @@ All pairwise difference α-β around the circle computed efficiently.
   return: matrix with pairwise differences
 """
 circ_dist2(α) = circ_dist2(α, α)
-circ_dist2(α, β) = angle.(exp.(im * α) ./ exp.(im * β'))
+circ_dist2(α, β) = angle.(cis.(α) ./ cis.(β'))
 
 
 """
@@ -369,7 +369,7 @@ Computes Omnibus or Hodges-Ajne test for non-uniformity of circular data.
 	- m: minimum number of samples falling in one half of the circle
 """
 function circ_otest(α; sz = deg2rad(1), w = ones(size(α)))
-  α = mod.(α, 2π)
+  α = mod2pi.(α)
   n = sum(w)
   dg = 0:sz:π
 
@@ -388,10 +388,7 @@ function circ_otest(α; sz = deg2rad(1), w = ones(size(α)))
   else
     # exact formula by Hodges (1955)
     # p = 2^(1-n) * (n-2m) * nchoosek(n,m)  # revised below for numerical stability
-    p = exp(
-      (1 - n) * log(2) + log(n - 2m) + loggamma(n + 1) - loggamma(m + 1) -
-      loggamma(n - m + 1),
-    )
+    p = exp((1 - n) * log(2) + log(n - 2m) + loggamma(n + 1) - loggamma(m + 1) - loggamma(n - m + 1))
   end
   return (; p, m)
 end
@@ -1211,7 +1208,7 @@ function circ_samplecdf(α; n = 100)
   ϕ = range(0, 2π, length = n + 1)
 
   # ensure all points in α are on interval [0, 2pi)
-  α = sort(mod.(α,2π))
+  α = sort(mod2pi.(α))
 
   dp = 1 / length(α) # incremental change in probability
   c = cumsum(map((l, r) -> dp * sum(l .<= α .< r), ϕ[1:end-1], ϕ[2:end]))
