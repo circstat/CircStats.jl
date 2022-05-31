@@ -163,7 +163,7 @@ function circ_confmean(α; xi = 0.05, w = ones(size(α)), d = 0, dims = 1)
   end
 
   # apply final transform
-  t = acos.(t ./ R)
+  t = acos.(clamp.(t ./ R, -1, 1))
   t = length(t) == 1 ? t[1] : t
 end
 
