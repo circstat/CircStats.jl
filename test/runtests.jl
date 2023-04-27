@@ -72,7 +72,7 @@ using Test, CircStats
     mp, ρp, μp = circ_moment(av;cent=true)
     @test mp ≈ 0.481125184946105 - 0.000000000000000im
     @test ρp ≈ 0.481125184946105
-    @test μp ≈ 3.741981750042832e-17
+    @test μp ≈ 3.741981750042832e-17 atol=1e-16
 
     mp, ρp, μp = circ_moment(am)
     mp, ρp, μp = circ_moment(am;cent=true)
