@@ -323,12 +323,17 @@ Calculates a measure of angular kurtosis.
   - k: kurtosis (from Pewsey)
   - k0: kurtosis (from Fisher)
 """
-function circ_kurtosis(α; w = ones(size(α)), dims = 1)
-  # compute mean direction
-  R = circ_r(α; w, d = 0, dims)
-  θ = circ_mean(α; w, dims).μ
-  _, ρ₂, _ = circ_moment(α; w, p = 2, cent = true, dims)
-  _, _, μ₂ = circ_moment(α; w, p = 2, cent = false, dims)
+function circ_kurtosis end
+function circ_kurtosis(α; dims=Colon(), r=nothing, mean=nothing)
+  # compute neccessary values
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α; dims=dims, d=0)
+  else
+    θ = mean === nothing ? circ_mean(α; dims=dims) : mean
+    R = r === nothing ? circ_r(α; dims=dims, d=0) : r
+  end
+  _, ρ₂, _ = circ_moment(α; dims=dims, p = 2, cent = true)
+  _, _, μ₂ = circ_moment(α; dims=dims, p = 2, cent = false)
 
   # compute skewness
   if ndims(θ) > 0
@@ -336,10 +341,31 @@ function circ_kurtosis(α; w = ones(size(α)), dims = 1)
   else
     θ₂ = θ
   end
-  k = sum(w .* cos.(2 * circ_dist(α, θ₂)); dims) ./ sum(w; dims)
+  k = mean(cos.(2 * circ_dist(α, θ₂)); dims=dims)
   k0 = (ρ₂ .* cos.(circ_dist(μ₂, 2θ)) .- R .^ 4) ./ (1 .- R) .^ 2    # (formula 2.30)
-  k = length(k) == 1 ? k[1] : k
-  k0 = length(k0) == 1 ? k0[1] : k0
+  return (; k, k0)
+end
+function circ_kurtosis(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; r=nothing, mean=nothing,
+)
+  # compute neccessary values
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α, w, dim; d=0)
+  else
+    θ = mean === nothing ? circ_mean(α, w, dim) : mean
+    R = r === nothing ? circ_r(α, w, dim; d=0) : r
+  end
+  _, ρ₂, _ = circ_moment(α, w, dim; p = 2, cent = true)
+  _, _, μ₂ = circ_moment(α, w, dim; p = 2, cent = false)
+
+  # compute skewness
+  if ndims(θ) > 0
+    θ₂ = repeat(θ, outer = Int.(size(α) ./ size(θ)))
+  else
+    θ₂ = θ
+  end
+  k = mean(cos.(2 * circ_dist(α, θ₂)), w, dim)
+  k0 = (ρ₂ .* cos.(circ_dist(μ₂, 2θ)) .- R .^ 4) ./ (1 .- R) .^ 2    # (formula 2.30)
   return (; k, k0)
 end
 
