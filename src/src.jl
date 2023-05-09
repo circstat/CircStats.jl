@@ -17,19 +17,29 @@ Computes mean resultant vector length for circular data.
 
 	return: mean resultant length
 """
-function circ_r(α; w = ones(size(α)), d = 0, dims = 1)
-  # compute weighted sum of cos and sin of angles
-  r = sum(w .* cis.(α); dims)
+function circ_r end
+function circ_r(α; d = 0, dims=Colon())
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, dims)
 
   # obtain length
-  r = abs.(r) ./ sum(w; dims)
+  r = abs.(cs_mean)
 
   # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
-  if d != 0
-    c = d / 2 / sin(d / 2)
-    r *= c
-  end
-  length(r) == 1 ? r[1] : r
+  c = _usinc(d / 2)
+  return r / c
+end
+function circ_r(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d = 0)
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, w, dim)
+
+  # obtain length
+  r = abs.(cs_mean)
+
+  # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
+  c = _usinc(d / 2)
+  return r / c
+end
 end
 
 """
