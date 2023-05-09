@@ -384,9 +384,10 @@ Calculates the complex p-th centred or non-centred moment of the angular data in
   - ρp: magnitude of the p-th moment
   - μp: angle of th p-th moment
 """
-function circ_moment(α; w = ones(size(α)), p = 1, cent = false, dims = 1)
+function circ_moment end
+function circ_moment(α; dims=Colon(), p = 1, cent = false, mean=nothing)
   if cent
-    θ = circ_mean(α; w, dims).μ
+    θ = mean === nothing ? circ_mean(α; dims=dims) : mean
     if ndims(θ) > 0
       v = Int.(size(α) ./ size(θ))
       θ = repeat(θ, outer = v)
@@ -394,18 +395,29 @@ function circ_moment(α; w = ones(size(α)), p = 1, cent = false, dims = 1)
     α = circ_dist(α, θ)
   end
 
-  n = size(α, dims)
-  c̄ = sum(cos.(p * α) .* w; dims) / n
-  s̄ = sum(sin.(p * α) .* w; dims) / n
-  mp = c̄ .+ im * s̄
+  mp = mean(x -> cis(p * x), α; dims=dims)
   ρp = abs.(mp)
   μp = angle.(mp)
-  mp = length(mp) == 1 ? mp[1] : mp
-  ρp = length(ρp) == 1 ? ρp[1] : ρp
-  μp = length(μp) == 1 ? μp[1] : μp
   return (; mp, ρp, μp)
 end
+function circ_moment(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; p = 1, cent = false,
+  mean=nothing,
+)
+  if cent
+    θ = mean === nothing ? circ_mean(α, w, dim) : mean
+    if ndims(θ) > 0
+      v = Int.(size(α) ./ size(θ))
+      θ = repeat(θ, outer = v)
+    end
+    α = circ_dist(α, θ)
+  end
 
+  mp = mean(cis.(p .* α), w, dim)
+  ρp = abs.(mp)
+  μp = angle.(mp)
+  return (; mp, ρp, μp)
+end
 
 
 """
