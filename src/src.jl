@@ -84,23 +84,23 @@ Computes the mean direction for circular data.
 
 	return:
 	- μ: mean direction
-	- ul: upper 95% confidence limit
-	- ll: lower 95% confidence limit
 """
-function circ_mean(α; w = ones(size(α)), dims = 1)
-  # compute weighted sum of cos and sin of angles
-  r = sum(w .* cis.(α); dims)
+function circ_mean end
+function circ_mean(α; dims=Colon())
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, dims)
 
-  # obtain mean by
-  μ = angle.(r)
-  μ = length(μ) == 1 ? μ[1] : μ
+  μ = angle.(cs_mean)
 
-  # confidence limits
-  t = circ_confmean(α; xi = 0.05, w, d = 0, dims)
-  ul = μ .+ t
-  ll = μ .- t
+  return μ
+end
+function circ_mean(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1)
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, w, dim)
 
-  return (; μ, ul, ll)
+  μ = angle.(cs_mean)
+
+  return μ
 end
 
 """
