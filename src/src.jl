@@ -206,30 +206,53 @@ Computes the confidence limits on the mean for circular data.
 
 	return: mean ± d yields upper/lower (1-xi)% confidence limit
 """
-function circ_confmean(α; xi = 0.05, w = ones(size(α)), d = 0, dims = 1)
+function circ_confmean(α; dims=Colon(), xi = 0.05, d = 0, mean=nothing, r=nothing)
   # compute ingredients for conf. lim.
-  r = circ_r(α; w, d, dims)
-  n = sum(w; dims)
-  R = n .* r
+  if mean === nothing && r === nothing
+    mean, r = circ_mean_and_r(α; dims=dims, d=d)
+  else
+    mean = mean === nothing ? circ_mean(α; dims=dims) : mean
+    r = r === nothing ? circ_r(α; dims=dims, d=d) : r
+  end
+  n = prod(size(α)[dims])
   c2 = quantile(Chisq(1), 1 - xi)
 
-  # check for resultant vector length and select appropriate formula
-  t = zeros(size(r))
+  t = _circ_confmean.(r, c2, n)
+  return t
+end
+function circ_confmean(
+    α::AbstractArray, w::StatsBase.FrequencyWeights, dim::Int=1;
+    xi = 0.05, d = 0, mean=nothing, r=nothing,
+)
+  all(isinteger, w) || throw(ArgumentError("weights must be integer counts"))
 
-  for i = 1:length(r)
-    if r[i] < 0.9 && r[i] > sqrt(c2 / 2 / n[i])
-      t[i] = sqrt((2 * n[i] * (2 * R[i]^2 - n[i] * c2)) / (4 * n[i] - c2))  # equ. 26.24
-    elseif r[i] >= 0.9
-      t[i] = sqrt(n[i]^2 - (n[i]^2 - R[i]^2) * exp(c2 / n[i]))      # equ. 26.25
-    else
-      t[i] = NaN
-      @warn "Requirements for confidence levels not met."
-    end
+  # compute ingredients for conf. lim.
+  if mean === nothing && r === nothing
+    mean, r = circ_mean_and_r(α, w, dim; d=d)
+  else
+    mean = mean === nothing ? circ_mean(α, w, dim) : mean
+    r = r === nothing ? circ_r(α, w, dim; d=d) : r
   end
+  n = sum(w)
+  c2 = quantile(Chisq(1), 1 - xi)
 
+  t = _circ_confmean.(r, c2, n)
+  return t
+end
+
+function _circ_confmean(r, c2, n)
+  R = n * r
+  # check for resultant vector length and select appropriate formula
+  if r < 0.9 && r > sqrt(c2 / 2 / n)
+    t = sqrt((2 * n * (2 * R^2 - n * c2)) / (4 * n - c2))  # equ. 26.24
+  elseif r[i] >= 0.9
+    t = sqrt(n^2 - (n^2 - R^2) * exp(c2 / n))      # equ. 26.25
+  else
+    t = NaN
+    @warn "Requirements for confidence levels not met."
+  end
   # apply final transform
-  t = acos.(clamp.(t ./ R, -1, 1))
-  t = length(t) == 1 ? t[1] : t
+  return acos(clamp(t / R, -1, 1))
 end
 
 
