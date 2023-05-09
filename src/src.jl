@@ -267,11 +267,16 @@ Calculates a measure of angular skewness.
 	- b: skewness (from Pewsey)
 	- b0: alternative skewness measure (from Fisher)
 """
-function circ_skewness(α; w = ones(size(α)), dims = 1)
+function circ_skewness end
+function circ_skewness(α; dims=Colon(), r=nothing, mean=nothing)
   # compute neccessary values
-  R = circ_r(α; w, d = 0, dims)
-  θ = circ_mean(α; w, dims).μ
-  _, ρ₂, μ₂ = circ_moment(α; w, p = 2, cent = false, dims)
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α; dims=dims, d=0)
+  else
+    θ = mean === nothing ? circ_mean(α; dims=dims) : mean
+    R = r === nothing ? circ_r(α; dims=dims, d=0) : r
+  end
+  _, ρ₂, μ₂ = circ_moment(α; dims=dims, p = 2, cent = false)
 
   # compute skewness
   if ndims(θ) > 0
@@ -279,10 +284,30 @@ function circ_skewness(α; w = ones(size(α)), dims = 1)
   else
     θ₂ = θ
   end
-  b = sum(w .* sin.(2 * circ_dist(α, θ₂)); dims) ./ sum(w; dims)
+  b = mean(sin.(2 * circ_dist(α, θ₂)); dims=dims)
   b0 = ρ₂ .* sin.(circ_dist(μ₂, 2θ)) ./ (1 .- R) .^ (3 / 2)   # (formula 2.29)
-  b = length(b) == 1 ? b[1] : b
-  b0 = length(b0) == 1 ? b0[1] : b0
+  return (; b, b0)
+end
+function circ_skewness(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; r=nothing, mean=nothing,
+)
+  # compute neccessary values
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α, w, dim; d=0)
+  else
+    θ = mean === nothing ? circ_mean(α, w, dim) : mean
+    R = r === nothing ? circ_r(α, w, dim; d=0) : r
+  end
+  _, ρ₂, μ₂ = circ_moment(α, w, dim; p = 2, cent = false)
+
+  # compute skewness
+  if ndims(θ) > 0
+    θ₂ = repeat(θ, outer = Int.(size(α) ./ size(θ)))
+  else
+    θ₂ = θ
+  end
+  b = mean(sin.(2 * circ_dist(α, θ₂)), w, dim)
+  b0 = ρ₂ .* sin.(circ_dist(μ₂, 2θ)) ./ (1 .- R) .^ (3 / 2)   # (formula 2.29)
   return (; b, b0)
 end
 
