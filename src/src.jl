@@ -452,19 +452,25 @@ Computes descriptive statistics for circular data.
 
   return: descriptive statistics
 """
-function circ_stats(α::AbstractVector; w = ones(size(α)), d = 0)
+function circ_stats end
+function circ_stats(
+  α::AbstractVector,
+  w::StatsBase.AbstractWeights=StatsBase.uweights(length(α));
+  d = 0,
+)
   # mean
-  mean = circ_mean(α; w).μ
+  mean, r = circ_mean_and_r(α, w; d=d)
   # median
   median = circ_median(α)
   # variance
-  var = circ_var(α; w, d)
+  var = (circ_var(α, w; r=r, kind=:circular), circ_var(α, w; r=r, kind=:angular))
   # standard deviation
-  std, std0 = circ_std(α; w, d)
+  std = circ_std(α, w; r=r, kind=:angular)
+  std0 = circ_std(α, w; r=r, kind=:circular)
   # skewness
-  skewness, skewness0 = circ_skewness(α; w)
+  skewness, skewness0 = circ_skewness(α, w; mean=mean, r=r)
   # kurtosis
-  kurtosis, kurtosis0 = circ_kurtosis(α; w)
+  kurtosis, kurtosis0 = circ_kurtosis(α, w; mean=mean, r=r)
 
   return (; mean, median, var,std,std0, skewness,skewness0,kurtosis,kurtosis0)
 end
