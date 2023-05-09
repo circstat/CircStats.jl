@@ -40,6 +40,39 @@ function circ_r(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d =
   c = _usinc(d / 2)
   return r / c
 end
+
+"""
+  circ_mean_and_r(α; d = 0, dims=Colon())
+  circ_mean_and_r(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d = 0)
+
+Computes the mean direction and mean resultant length for circular data.
+"""
+function circ_mean_and_r end
+function circ_mean_and_r(α; d = 0, dims=Colon())
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, dims)
+
+  μ = angle.(cs_mean)
+
+  # obtain length
+  r = abs.(cs_mean)
+
+  # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
+  c = _usinc(d / 2)
+  return μ, r / c
+end
+function circ_mean_and_r(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d = 0)
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, w, dim)
+
+  μ = angle.(cs_mean)
+
+  # obtain length
+  r = abs.(cs_mean)
+
+  # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
+  c = _usinc(d / 2)
+  return μ, r / c
 end
 
 """
