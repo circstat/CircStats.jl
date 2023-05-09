@@ -1,3 +1,12 @@
+_usinc(x::Real) = iszero(x) ? one(x) : (isinf(x) ? zero(x) : sin(x) / x)
+
+_complex_mean(α, dims) = mean(cis, α, dims=dims)
+_complex_mean(α, dims::Colon) = mean(cis, α)
+function _complex_mean(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int)
+    return mean(cis.(α), w, dim)
+end
+_complex_mean(α::AbstractArray, w::StatsBase.UnitWeights, dim::Int) = _complex_mean(α, dim)
+
 """
 Computes mean resultant vector length for circular data.
 
