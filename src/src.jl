@@ -493,10 +493,18 @@ Computes Rayleigh test for non-uniformity of circular data.
 	- p: p-value of Rayleigh's test
 	- z: value of the z-statistic
 """
-function circ_rtest(α; w = ones(size(α)), d = 0)
-  r = circ_r(α; w, d)
+function circ_rtest end
+function circ_rtest(α; dims=Colon(), d = 0, r = circ_r(α; dims=dims, d=d))
+  n = prod(size(α)[dims])
+  return _circ_rtest(r, n)
+end
+function circ_rtest(α::AbstractArray, w::StatsBase.FrequencyWeights, dim::Int=1; d = 0, r = circ_r(α, w, dim; d=d))
+  all(isinteger, w) || throw(ArgumentError("weights must be integer counts"))
   n = sum(w)
+  return _circ_rtest(r, n)
+end
 
+function _circ_rtest(r, n)
   # compute Rayleigh's R (equ. 27.1)
   R = n * r
 
