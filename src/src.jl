@@ -145,19 +145,25 @@ Computes circular standard deviation for circular data (equ. 26.20, Zar).
    - w: weightings in case of binned angle data
    - d: spacing of bin centers for binned data, used to correct for bias in estimation of r, in radians
    - dims: compute along this dimension(default=1)
+   - kind: kind of standard deviation to compute, `:angular` or `:circular` (default=`:angular`)
 
 	return:
-  - s: angular deviation
-  - s0: circular standard deviation
+  - s: standard deviation
 """
-function circ_std(α; w = ones(size(α)), d = 0, dims = 1)
-  # compute mean resultant vector length
-  r = circ_r(α; w, d, dims)
-
-  s = sqrt.(2 .* (1 .- r))      # 26.20
-  s0 = sqrt.(-2 .* log.(r))   # 26.21
-  return (; s, s0)
+function circ_std end
+function circ_std(α; dims=Colon(), d=0, r=circ_r(α; dims=dims), kind::Symbol=:angular)
+  kind === :angular && return _circ_std_angular(r)
+  kind === :circular && return _circ_std_circular(r)
+  throw(ArgumentError("unsupported circ_std kind `$(kind)`"))
 end
+function circ_std(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d=0, r=circ_r(α, w, dim; d=d), kind::Symbol=:angular)
+  kind === :angular && return _circ_std_angular(r)
+  kind === :circular && return _circ_std_circular(r)
+  throw(ArgumentError("unsupported circ_std kind `$(kind)`"))
+end
+
+_circ_std_angular(r) = sqrt.(2 .* (1 .- r))  # 26.20
+_circ_std_circular(r) = sqrt.(-2 .* log.(r))  # 26.21
 
 """
 Computes circular variance for circular data (equ. 26.17/18, Zar).
@@ -166,21 +172,28 @@ Computes circular variance for circular data (equ. 26.17/18, Zar).
   - w: number of incidences in case of binned angle data
   - d: spacing of bin centers for binned data, used to correct for bias in estimation of r, in radians
 	- dims: compute along this dimension(default=1)
+  - kind: kind of variance to compute, `:angular` (`2(1-r)`) or `:circular` (`1-r`) (default=`:angular`)
 
 	return:
-	- S: circular variance 1-r
-	- s: angular variance 2(1-r)
+  - s: variance
 """
-function circ_var(α; w = ones(size(α)), d = 0, dims = 1)
-  # compute mean resultant vector length
-  r = circ_r(α; w, d, dims)
-
-  # apply transformation to var
-  S = 1 .- r
-  s = 2 * S
-  return (; S, s)
+function circ_var end
+function circ_var(α; dims=Colon(), d=0, r=circ_r(α; dims=dims, d=d), kind::Symbol=:angular)
+  kind === :angular && return _circ_var_angular(r)
+  kind === :circular && return _circ_var_circular(r)
+  throw(ArgumentError("unsupported circ_var kind `$(kind)`"))
+end
+function circ_var(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1;
+  d=0, r=circ_r(α, w, dim; d=d), kind::Symbol=:angular,
+)
+  kind === :angular && return _circ_var_angular(r)
+  kind === :circular && return _circ_var_circular(r)
+  throw(ArgumentError("unsupported circ_var kind `$(kind)`"))
 end
 
+_circ_var_angular(r) = (1 .- r)
+_circ_var_circular(r) = 2 .* (1 .- r)
 
 """
 Computes the confidence limits on the mean for circular data.
