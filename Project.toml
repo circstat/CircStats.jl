@@ -1,7 +1,7 @@
 name = "CircStats"
 uuid = "2f6764a1-d620-4564-9394-76eb7c776766"
 authors = ["Li Alex Zhang <fff008@gmail.com>"]
-version = "1.0.1"
+version = "1.0.2"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
@@ -12,7 +12,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 Distributions = "0.25"
-HypothesisTests = "0.10"
+HypothesisTests = "0.10, 0.11"
 SpecialFunctions = "1,2"
 julia = "1.7"
 
