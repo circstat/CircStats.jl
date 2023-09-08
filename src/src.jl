@@ -1,3 +1,12 @@
+_usinc(x::Real) = iszero(x) ? one(x) : (isinf(x) ? zero(x) : sin(x) / x)
+
+_complex_mean(α, dims) = mean(cis, α, dims=dims)
+_complex_mean(α, dims::Colon) = mean(cis, α)
+function _complex_mean(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int)
+    return mean(cis.(α), w, dim)
+end
+_complex_mean(α::AbstractArray, w::StatsBase.UnitWeights, dim::Int) = _complex_mean(α, dim)
+
 """
 Computes mean resultant vector length for circular data.
 
@@ -8,19 +17,62 @@ Computes mean resultant vector length for circular data.
 
 	return: mean resultant length
 """
-function circ_r(α; w = ones(size(α)), d = 0, dims = 1)
-  # compute weighted sum of cos and sin of angles
-  r = sum(w .* cis.(α); dims)
+function circ_r end
+function circ_r(α; d = 0, dims=Colon())
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, dims)
 
   # obtain length
-  r = abs.(r) ./ sum(w; dims)
+  r = abs.(cs_mean)
 
   # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
-  if d != 0
-    c = d / 2 / sin(d / 2)
-    r *= c
-  end
-  length(r) == 1 ? r[1] : r
+  c = _usinc(d / 2)
+  return r / c
+end
+function circ_r(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d = 0)
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, w, dim)
+
+  # obtain length
+  r = abs.(cs_mean)
+
+  # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
+  c = _usinc(d / 2)
+  return r / c
+end
+
+"""
+  circ_mean_and_r(α; d = 0, dims=Colon())
+  circ_mean_and_r(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d = 0)
+
+Computes the mean direction and mean resultant length for circular data.
+"""
+function circ_mean_and_r end
+function circ_mean_and_r(α; d = 0, dims=Colon())
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, dims)
+
+  μ = angle.(cs_mean)
+
+  # obtain length
+  r = abs.(cs_mean)
+
+  # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
+  c = _usinc(d / 2)
+  return μ, r / c
+end
+function circ_mean_and_r(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d = 0)
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, w, dim)
+
+  μ = angle.(cs_mean)
+
+  # obtain length
+  r = abs.(cs_mean)
+
+  # for data with known spacing, apply correction factor to correct for bias in the estimation of r (see Zar, p. 601, equ. 26.16)
+  c = _usinc(d / 2)
+  return μ, r / c
 end
 
 """
@@ -32,23 +84,23 @@ Computes the mean direction for circular data.
 
 	return:
 	- μ: mean direction
-	- ul: upper 95% confidence limit
-	- ll: lower 95% confidence limit
 """
-function circ_mean(α; w = ones(size(α)), dims = 1)
-  # compute weighted sum of cos and sin of angles
-  r = sum(w .* cis.(α); dims)
+function circ_mean end
+function circ_mean(α; dims=Colon())
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, dims)
 
-  # obtain mean by
-  μ = angle.(r)
-  μ = length(μ) == 1 ? μ[1] : μ
+  μ = angle.(cs_mean)
 
-  # confidence limits
-  t = circ_confmean(α; xi = 0.05, w, d = 0, dims)
-  ul = μ .+ t
-  ll = μ .- t
+  return μ
+end
+function circ_mean(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1)
+  # compute weighted mean of cos and sin of angles
+  cs_mean = _complex_mean(α, w, dim)
 
-  return (; μ, ul, ll)
+  μ = angle.(cs_mean)
+
+  return μ
 end
 
 """
@@ -93,19 +145,25 @@ Computes circular standard deviation for circular data (equ. 26.20, Zar).
    - w: weightings in case of binned angle data
    - d: spacing of bin centers for binned data, used to correct for bias in estimation of r, in radians
    - dims: compute along this dimension(default=1)
+   - kind: kind of standard deviation to compute, `:angular` or `:circular` (default=`:angular`)
 
 	return:
-  - s: angular deviation
-  - s0: circular standard deviation
+  - s: standard deviation
 """
-function circ_std(α; w = ones(size(α)), d = 0, dims = 1)
-  # compute mean resultant vector length
-  r = circ_r(α; w, d, dims)
-
-  s = sqrt.(2 .* (1 .- r))      # 26.20
-  s0 = sqrt.(-2 .* log.(r))   # 26.21
-  return (; s, s0)
+function circ_std end
+function circ_std(α; dims=Colon(), d=0, r=circ_r(α; dims=dims), kind::Symbol=:angular)
+  kind === :angular && return _circ_std_angular(r)
+  kind === :circular && return _circ_std_circular(r)
+  throw(ArgumentError("unsupported circ_std kind `$(kind)`"))
 end
+function circ_std(α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; d=0, r=circ_r(α, w, dim; d=d), kind::Symbol=:angular)
+  kind === :angular && return _circ_std_angular(r)
+  kind === :circular && return _circ_std_circular(r)
+  throw(ArgumentError("unsupported circ_std kind `$(kind)`"))
+end
+
+_circ_std_angular(r) = sqrt.(2 .* (1 .- r))  # 26.20
+_circ_std_circular(r) = sqrt.(-2 .* log.(r))  # 26.21
 
 """
 Computes circular variance for circular data (equ. 26.17/18, Zar).
@@ -114,21 +172,28 @@ Computes circular variance for circular data (equ. 26.17/18, Zar).
   - w: number of incidences in case of binned angle data
   - d: spacing of bin centers for binned data, used to correct for bias in estimation of r, in radians
 	- dims: compute along this dimension(default=1)
+  - kind: kind of variance to compute, `:angular` (`2(1-r)`) or `:circular` (`1-r`) (default=`:angular`)
 
 	return:
-	- S: circular variance 1-r
-	- s: angular variance 2(1-r)
+  - s: variance
 """
-function circ_var(α; w = ones(size(α)), d = 0, dims = 1)
-  # compute mean resultant vector length
-  r = circ_r(α; w, d, dims)
-
-  # apply transformation to var
-  S = 1 .- r
-  s = 2 * S
-  return (; S, s)
+function circ_var end
+function circ_var(α; dims=Colon(), d=0, r=circ_r(α; dims=dims, d=d), kind::Symbol=:angular)
+  kind === :angular && return _circ_var_angular(r)
+  kind === :circular && return _circ_var_circular(r)
+  throw(ArgumentError("unsupported circ_var kind `$(kind)`"))
+end
+function circ_var(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1;
+  d=0, r=circ_r(α, w, dim; d=d), kind::Symbol=:angular,
+)
+  kind === :angular && return _circ_var_angular(r)
+  kind === :circular && return _circ_var_circular(r)
+  throw(ArgumentError("unsupported circ_var kind `$(kind)`"))
 end
 
+_circ_var_angular(r) = (1 .- r)
+_circ_var_circular(r) = 2 .* (1 .- r)
 
 """
 Computes the confidence limits on the mean for circular data.
@@ -141,30 +206,53 @@ Computes the confidence limits on the mean for circular data.
 
 	return: mean ± d yields upper/lower (1-xi)% confidence limit
 """
-function circ_confmean(α; xi = 0.05, w = ones(size(α)), d = 0, dims = 1)
+function circ_confmean(α; dims=Colon(), xi = 0.05, d = 0, mean=nothing, r=nothing)
   # compute ingredients for conf. lim.
-  r = circ_r(α; w, d, dims)
-  n = sum(w; dims)
-  R = n .* r
+  if mean === nothing && r === nothing
+    mean, r = circ_mean_and_r(α; dims=dims, d=d)
+  else
+    mean = mean === nothing ? circ_mean(α; dims=dims) : mean
+    r = r === nothing ? circ_r(α; dims=dims, d=d) : r
+  end
+  n = prod(size(α)[dims])
   c2 = quantile(Chisq(1), 1 - xi)
 
-  # check for resultant vector length and select appropriate formula
-  t = zeros(size(r))
+  t = _circ_confmean.(r, c2, n)
+  return t
+end
+function circ_confmean(
+    α::AbstractArray, w::StatsBase.FrequencyWeights, dim::Int=1;
+    xi = 0.05, d = 0, mean=nothing, r=nothing,
+)
+  all(isinteger, w) || throw(ArgumentError("weights must be integer counts"))
 
-  for i = 1:length(r)
-    if r[i] < 0.9 && r[i] > sqrt(c2 / 2 / n[i])
-      t[i] = sqrt((2 * n[i] * (2 * R[i]^2 - n[i] * c2)) / (4 * n[i] - c2))  # equ. 26.24
-    elseif r[i] >= 0.9
-      t[i] = sqrt(n[i]^2 - (n[i]^2 - R[i]^2) * exp(c2 / n[i]))      # equ. 26.25
-    else
-      t[i] = NaN
-      @warn "Requirements for confidence levels not met."
-    end
+  # compute ingredients for conf. lim.
+  if mean === nothing && r === nothing
+    mean, r = circ_mean_and_r(α, w, dim; d=d)
+  else
+    mean = mean === nothing ? circ_mean(α, w, dim) : mean
+    r = r === nothing ? circ_r(α, w, dim; d=d) : r
   end
+  n = sum(w)
+  c2 = quantile(Chisq(1), 1 - xi)
 
+  t = _circ_confmean.(r, c2, n)
+  return t
+end
+
+function _circ_confmean(r, c2, n)
+  R = n * r
+  # check for resultant vector length and select appropriate formula
+  if r < 0.9 && r > sqrt(c2 / 2 / n)
+    t = sqrt((2 * n * (2 * R^2 - n * c2)) / (4 * n - c2))  # equ. 26.24
+  elseif r[i] >= 0.9
+    t = sqrt(n^2 - (n^2 - R^2) * exp(c2 / n))      # equ. 26.25
+  else
+    t = NaN
+    @warn "Requirements for confidence levels not met."
+  end
   # apply final transform
-  t = acos.(clamp.(t ./ R, -1, 1))
-  t = length(t) == 1 ? t[1] : t
+  return acos(clamp(t / R, -1, 1))
 end
 
 
@@ -179,11 +267,16 @@ Calculates a measure of angular skewness.
 	- b: skewness (from Pewsey)
 	- b0: alternative skewness measure (from Fisher)
 """
-function circ_skewness(α; w = ones(size(α)), dims = 1)
+function circ_skewness end
+function circ_skewness(α; dims=Colon(), r=nothing, mean=nothing)
   # compute neccessary values
-  R = circ_r(α; w, d = 0, dims)
-  θ = circ_mean(α; w, dims).μ
-  _, ρ₂, μ₂ = circ_moment(α; w, p = 2, cent = false, dims)
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α; dims=dims, d=0)
+  else
+    θ = mean === nothing ? circ_mean(α; dims=dims) : mean
+    R = r === nothing ? circ_r(α; dims=dims, d=0) : r
+  end
+  _, ρ₂, μ₂ = circ_moment(α; dims=dims, p = 2, cent = false)
 
   # compute skewness
   if ndims(θ) > 0
@@ -191,10 +284,30 @@ function circ_skewness(α; w = ones(size(α)), dims = 1)
   else
     θ₂ = θ
   end
-  b = sum(w .* sin.(2 * circ_dist(α, θ₂)); dims) ./ sum(w; dims)
+  b = mean(sin.(2 * circ_dist(α, θ₂)); dims=dims)
   b0 = ρ₂ .* sin.(circ_dist(μ₂, 2θ)) ./ (1 .- R) .^ (3 / 2)   # (formula 2.29)
-  b = length(b) == 1 ? b[1] : b
-  b0 = length(b0) == 1 ? b0[1] : b0
+  return (; b, b0)
+end
+function circ_skewness(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; r=nothing, mean=nothing,
+)
+  # compute neccessary values
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α, w, dim; d=0)
+  else
+    θ = mean === nothing ? circ_mean(α, w, dim) : mean
+    R = r === nothing ? circ_r(α, w, dim; d=0) : r
+  end
+  _, ρ₂, μ₂ = circ_moment(α, w, dim; p = 2, cent = false)
+
+  # compute skewness
+  if ndims(θ) > 0
+    θ₂ = repeat(θ, outer = Int.(size(α) ./ size(θ)))
+  else
+    θ₂ = θ
+  end
+  b = mean(sin.(2 * circ_dist(α, θ₂)), w, dim)
+  b0 = ρ₂ .* sin.(circ_dist(μ₂, 2θ)) ./ (1 .- R) .^ (3 / 2)   # (formula 2.29)
   return (; b, b0)
 end
 
@@ -210,12 +323,17 @@ Calculates a measure of angular kurtosis.
   - k: kurtosis (from Pewsey)
   - k0: kurtosis (from Fisher)
 """
-function circ_kurtosis(α; w = ones(size(α)), dims = 1)
-  # compute mean direction
-  R = circ_r(α; w, d = 0, dims)
-  θ = circ_mean(α; w, dims).μ
-  _, ρ₂, _ = circ_moment(α; w, p = 2, cent = true, dims)
-  _, _, μ₂ = circ_moment(α; w, p = 2, cent = false, dims)
+function circ_kurtosis end
+function circ_kurtosis(α; dims=Colon(), r=nothing, mean=nothing)
+  # compute neccessary values
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α; dims=dims, d=0)
+  else
+    θ = mean === nothing ? circ_mean(α; dims=dims) : mean
+    R = r === nothing ? circ_r(α; dims=dims, d=0) : r
+  end
+  _, ρ₂, _ = circ_moment(α; dims=dims, p = 2, cent = true)
+  _, _, μ₂ = circ_moment(α; dims=dims, p = 2, cent = false)
 
   # compute skewness
   if ndims(θ) > 0
@@ -223,10 +341,31 @@ function circ_kurtosis(α; w = ones(size(α)), dims = 1)
   else
     θ₂ = θ
   end
-  k = sum(w .* cos.(2 * circ_dist(α, θ₂)); dims) ./ sum(w; dims)
+  k = mean(cos.(2 * circ_dist(α, θ₂)); dims=dims)
   k0 = (ρ₂ .* cos.(circ_dist(μ₂, 2θ)) .- R .^ 4) ./ (1 .- R) .^ 2    # (formula 2.30)
-  k = length(k) == 1 ? k[1] : k
-  k0 = length(k0) == 1 ? k0[1] : k0
+  return (; k, k0)
+end
+function circ_kurtosis(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; r=nothing, mean=nothing,
+)
+  # compute neccessary values
+  if mean === nothing && r === nothing
+    θ, R = circ_mean_and_r(α, w, dim; d=0)
+  else
+    θ = mean === nothing ? circ_mean(α, w, dim) : mean
+    R = r === nothing ? circ_r(α, w, dim; d=0) : r
+  end
+  _, ρ₂, _ = circ_moment(α, w, dim; p = 2, cent = true)
+  _, _, μ₂ = circ_moment(α, w, dim; p = 2, cent = false)
+
+  # compute skewness
+  if ndims(θ) > 0
+    θ₂ = repeat(θ, outer = Int.(size(α) ./ size(θ)))
+  else
+    θ₂ = θ
+  end
+  k = mean(cos.(2 * circ_dist(α, θ₂)), w, dim)
+  k0 = (ρ₂ .* cos.(circ_dist(μ₂, 2θ)) .- R .^ 4) ./ (1 .- R) .^ 2    # (formula 2.30)
   return (; k, k0)
 end
 
@@ -245,9 +384,10 @@ Calculates the complex p-th centred or non-centred moment of the angular data in
   - ρp: magnitude of the p-th moment
   - μp: angle of th p-th moment
 """
-function circ_moment(α; w = ones(size(α)), p = 1, cent = false, dims = 1)
+function circ_moment end
+function circ_moment(α; dims=Colon(), p = 1, cent = false, mean=nothing)
   if cent
-    θ = circ_mean(α; w, dims).μ
+    θ = mean === nothing ? circ_mean(α; dims=dims) : mean
     if ndims(θ) > 0
       v = Int.(size(α) ./ size(θ))
       θ = repeat(θ, outer = v)
@@ -255,18 +395,29 @@ function circ_moment(α; w = ones(size(α)), p = 1, cent = false, dims = 1)
     α = circ_dist(α, θ)
   end
 
-  n = size(α, dims)
-  c̄ = sum(cos.(p * α) .* w; dims) / n
-  s̄ = sum(sin.(p * α) .* w; dims) / n
-  mp = c̄ .+ im * s̄
+  mp = mean(x -> cis(p * x), α; dims=dims)
   ρp = abs.(mp)
   μp = angle.(mp)
-  mp = length(mp) == 1 ? mp[1] : mp
-  ρp = length(ρp) == 1 ? ρp[1] : ρp
-  μp = length(μp) == 1 ? μp[1] : μp
   return (; mp, ρp, μp)
 end
+function circ_moment(
+  α::AbstractArray, w::StatsBase.AbstractWeights, dim::Int=1; p = 1, cent = false,
+  mean=nothing,
+)
+  if cent
+    θ = mean === nothing ? circ_mean(α, w, dim) : mean
+    if ndims(θ) > 0
+      v = Int.(size(α) ./ size(θ))
+      θ = repeat(θ, outer = v)
+    end
+    α = circ_dist(α, θ)
+  end
 
+  mp = mean(cis.(p .* α), w, dim)
+  ρp = abs.(mp)
+  μp = angle.(mp)
+  return (; mp, ρp, μp)
+end
 
 
 """
@@ -301,19 +452,25 @@ Computes descriptive statistics for circular data.
 
   return: descriptive statistics
 """
-function circ_stats(α::AbstractVector; w = ones(size(α)), d = 0)
+function circ_stats end
+function circ_stats(
+  α::AbstractVector,
+  w::StatsBase.AbstractWeights=StatsBase.uweights(length(α));
+  d = 0,
+)
   # mean
-  mean = circ_mean(α; w).μ
+  mean, r = circ_mean_and_r(α, w; d=d)
   # median
   median = circ_median(α)
   # variance
-  var = circ_var(α; w, d)
+  var = (circ_var(α, w; r=r, kind=:circular), circ_var(α, w; r=r, kind=:angular))
   # standard deviation
-  std, std0 = circ_std(α; w, d)
+  std = circ_std(α, w; r=r, kind=:angular)
+  std0 = circ_std(α, w; r=r, kind=:circular)
   # skewness
-  skewness, skewness0 = circ_skewness(α; w)
+  skewness, skewness0 = circ_skewness(α, w; mean=mean, r=r)
   # kurtosis
-  kurtosis, kurtosis0 = circ_kurtosis(α; w)
+  kurtosis, kurtosis0 = circ_kurtosis(α, w; mean=mean, r=r)
 
   return (; mean, median, var,std,std0, skewness,skewness0,kurtosis,kurtosis0)
 end
@@ -336,10 +493,18 @@ Computes Rayleigh test for non-uniformity of circular data.
 	- p: p-value of Rayleigh's test
 	- z: value of the z-statistic
 """
-function circ_rtest(α; w = ones(size(α)), d = 0)
-  r = circ_r(α; w, d)
+function circ_rtest end
+function circ_rtest(α; dims=Colon(), d = 0, r = circ_r(α; dims=dims, d=d))
+  n = prod(size(α)[dims])
+  return _circ_rtest(r, n)
+end
+function circ_rtest(α::AbstractArray, w::StatsBase.FrequencyWeights, dim::Int=1; d = 0, r = circ_r(α, w, dim; d=d))
+  all(isinteger, w) || throw(ArgumentError("weights must be integer counts"))
   n = sum(w)
+  return _circ_rtest(r, n)
+end
 
+function _circ_rtest(r, n)
   # compute Rayleigh's R (equ. 27.1)
   R = n * r
 
