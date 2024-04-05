@@ -1,7 +1,7 @@
 name = "CircStats"
 uuid = "2f6764a1-d620-4564-9394-76eb7c776766"
 authors = ["Li Alex Zhang <fff008@gmail.com>"]
-version = "1.0.3"
+version = "1.0.4"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
